@@ -33,6 +33,12 @@ export class AuthService {
   ) {
     this.emailVerificationEnabled =
       this.configService.get<boolean>('EMAIL_VERIFICATION_ENABLED') ?? true;
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!googleClientId) {
+      throw new Error('GOOGLE_CLIENT_ID manquant pour le login Google.');
+    }
+    this.googleClient = new OAuth2Client(googleClientId);
+    this.googleClientId = googleClientId;
   }
 
   async registerLocal(dto: RegisterDto) {
@@ -188,13 +194,14 @@ export class AuthService {
   }
 
   // Google token-based login (frontend sends id_token)
-  private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  private googleClient: OAuth2Client;
+  private googleClientId: string;
 
   async verifyGoogleToken(idToken: string) {
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
+        audience: this.googleClientId,
       });
 
       const payload = ticket.getPayload();
@@ -216,6 +223,9 @@ export class AuthService {
           firstName,
           lastName,
         );
+      } else {
+        await this.usersService.linkGoogleAccount(String(user._id));
+        user = await this.usersService.findByEmail(email);
       }
 
       return this.signUser(user as any);
@@ -232,7 +242,7 @@ export class AuthService {
     }
 
     // 2️⃣ Vérification OTP
-    const valid = this.otpService.verifyOtp(phone, code);
+    const valid = await this.otpService.verifyOtp(phone, code);
     if (!valid) throw new BadRequestException('OTP invalide ou expiré');
 
     // 3️⃣ Trouver ou créer l'utilisateur

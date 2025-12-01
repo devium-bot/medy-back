@@ -15,7 +15,7 @@ async function bootstrap() {
         .map((origin) => origin.trim())
         .filter(Boolean)
     : [];
-  const defaultOrigins = ['http://localhost:5500', 'null'];
+  const defaultOrigins = ['http://localhost:5173'];
   const allowedOrigins = parsedOrigins.length ? parsedOrigins : defaultOrigins;
 
   app.enableCors({

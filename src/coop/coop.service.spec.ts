@@ -36,6 +36,7 @@ describe('CoopService (unit)', () => {
     const notifications = { emit: jest.fn() } as unknown as NotificationsService;
     const realtime = { emitToSession: jest.fn() } as unknown as RealtimeService;
     const questionModel = mockModel({});
+    const usersService = { findById: jest.fn() } as any;
 
     const service = new CoopService(
       coopModel,
@@ -43,6 +44,7 @@ describe('CoopService (unit)', () => {
       notifications,
       questionModel,
       realtime,
+      usersService,
     );
 
     await expect(service.launchSession(new Types.ObjectId().toHexString(), idA.toHexString())).rejects.toBeInstanceOf(
@@ -66,12 +68,14 @@ describe('CoopService (unit)', () => {
         populate: () => ({ populate: () => ({ populate: () => ({ lean: () => Promise.resolve([{ _id: questionIds[0] }, { _id: questionIds[1] }]) }) }) }),
       }),
     });
+    const usersService = { findById: jest.fn() } as any;
     const service = new CoopService(
       coopModel,
       mockModel({}),
       ({ emit: jest.fn() } as unknown) as NotificationsService,
       questionModel,
       ({ emitToSession: jest.fn() } as unknown) as RealtimeService,
+      usersService,
     );
 
     const res = await service.launchSession(new Types.ObjectId().toHexString(), idA.toHexString());
@@ -82,15 +86,16 @@ describe('CoopService (unit)', () => {
   it('setReady moves to ready when both true', async () => {
     const sess = makeSessionDoc();
     const coopModel = mockModel({ findById: jest.fn().mockResolvedValue(sess) });
+    const usersService = { findById: jest.fn() } as any;
     const service = new CoopService(
       coopModel,
       mockModel({}),
       ({ emit: jest.fn() } as unknown) as NotificationsService,
       mockModel({}),
       ({ emitToSession: jest.fn() } as unknown) as RealtimeService,
+      usersService,
     );
     const updated = await service.setReady(sess._id.toHexString(), idB.toHexString(), true);
     expect(updated.status).toBe('ready');
   });
 });
-

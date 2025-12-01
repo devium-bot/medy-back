@@ -47,6 +47,13 @@ import { PaymentsModule } from './payments/payments.module';
           ? String(config.JWT_EXPIRES_IN)
           : '7d';
 
+        const googleClientId = config.GOOGLE_CLIENT_ID
+          ? String(config.GOOGLE_CLIENT_ID)
+          : '';
+        if (!googleClientId) {
+          throw new Error('La variable GOOGLE_CLIENT_ID est requise pour le login Google.');
+        }
+
         const smtpHost = config.SMTP_HOST ? String(config.SMTP_HOST) : '';
         const smtpPortValue =
           config.SMTP_PORT !== undefined ? Number(config.SMTP_PORT) : 587;
@@ -68,6 +75,41 @@ import { PaymentsModule } from './payments/payments.module';
         const emailFrom = config.EMAIL_FROM ? String(config.EMAIL_FROM) : '';
         if (!emailFrom) {
           throw new Error('La variable EMAIL_FROM est requise.');
+        }
+
+        const twilioAccountSid = config.TWILIO_ACCOUNT_SID
+          ? String(config.TWILIO_ACCOUNT_SID)
+          : '';
+        const twilioAuthToken = config.TWILIO_AUTH_TOKEN
+          ? String(config.TWILIO_AUTH_TOKEN)
+          : '';
+        const twilioPhone = config.TWILIO_PHONE_NUMBER
+          ? String(config.TWILIO_PHONE_NUMBER)
+          : '';
+        const anyTwilio = twilioAccountSid || twilioAuthToken || twilioPhone;
+        if (anyTwilio && (!twilioAccountSid || !twilioAuthToken || !twilioPhone)) {
+          throw new Error(
+            'Les variables TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN et TWILIO_PHONE_NUMBER doivent être toutes renseignées ou toutes absentes.',
+          );
+        }
+
+        const chargilyPaymentLink = config.CHARGILY_PAYMENT_LINK
+          ? String(config.CHARGILY_PAYMENT_LINK)
+          : '';
+        const chargilyWebhookSecret = config.CHARGILY_WEBHOOK_SECRET
+          ? String(config.CHARGILY_WEBHOOK_SECRET)
+          : '';
+        const chargilyConfigured = Boolean(chargilyPaymentLink);
+        if (chargilyConfigured && !chargilyWebhookSecret) {
+          throw new Error(
+            'CHARGILY_PAYMENT_LINK est défini mais CHARGILY_WEBHOOK_SECRET est manquant.',
+          );
+        }
+
+        const aiProvider = config.AI_PROVIDER ? String(config.AI_PROVIDER) : undefined;
+        const groqKey = config.GROQ_API_KEY ? String(config.GROQ_API_KEY) : '';
+        if (aiProvider === 'groq' && !groqKey) {
+          throw new Error('AI_PROVIDER=groq mais GROQ_API_KEY est manquant.');
         }
 
         const emailVerificationEnabled =
@@ -92,6 +134,7 @@ import { PaymentsModule } from './payments/payments.module';
           ALLOWED_ORIGINS: allowedOrigins,
           JWT_SECRET: jwtSecret,
           JWT_EXPIRES_IN: jwtExpiresIn,
+          GOOGLE_CLIENT_ID: googleClientId,
           SMTP_HOST: smtpHost || undefined,
           SMTP_PORT: Number.isNaN(smtpPortValue) ? undefined : smtpPortValue,
           SMTP_USER: smtpUser || undefined,

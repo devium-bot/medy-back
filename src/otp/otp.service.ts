@@ -1,5 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { createHash } from 'crypto';
 import Twilio from 'twilio';
+import { OtpEntry, OtpEntryDocument } from './otp.schema';
+
+const OTP_VALIDITY_MS = 5 * 60 * 1000;
+const OTP_RESEND_DELAY_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class OtpService {
@@ -7,13 +16,16 @@ export class OtpService {
   private client: ReturnType<typeof Twilio> | null;
   private fromNumber: string | null;
 
-  // Stockage simple en mémoire pour exemple (production: Redis ou DB)
-  private otpStore = new Map<string, { code: string; expiresAt: number }>();
-
-  constructor() {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
-    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
-    this.fromNumber = process.env.TWILIO_PHONE_NUMBER?.trim() ?? null;
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectModel(OtpEntry.name)
+    private readonly otpModel: Model<OtpEntryDocument>,
+  ) {
+    const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID')?.trim();
+    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN')?.trim();
+    this.fromNumber = this.configService
+      .get<string>('TWILIO_PHONE_NUMBER')
+      ?.trim() ?? null;
 
     if (!accountSid || !authToken) {
       this.logger.warn(
@@ -29,6 +41,20 @@ export class OtpService {
       this.logger.error('Initialisation Twilio échouée', error as Error);
       this.client = null;
     }
+  }
+
+  private async canSendNow(phone: string) {
+    const existing = await this.otpModel.findOne({ phone });
+    if (!existing) return true;
+    const nextAllowedAt =
+      existing.lastSentAt.getTime() + OTP_RESEND_DELAY_MS;
+    if (nextAllowedAt > Date.now()) {
+      return {
+        ok: false,
+        retryAfterMs: nextAllowedAt - Date.now(),
+      };
+    }
+    return true;
   }
 
   private normalizePhoneNumber(rawPhone: string) {
@@ -73,10 +99,29 @@ export class OtpService {
       };
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // OTP 6 chiffres
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min de validité
+    const sendCheck = await this.canSendNow(normalizedPhone);
+    if (sendCheck !== true) {
+      return {
+        success: false,
+        error: `Veuillez patienter ${Math.ceil(sendCheck.retryAfterMs / 1000)}s avant de redemander un code.`,
+      };
+    }
 
-    this.otpStore.set(normalizedPhone, { code, expiresAt });
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // OTP 6 chiffres
+    const expiresAt = new Date(Date.now() + OTP_VALIDITY_MS);
+    const codeHash = createHash('sha256').update(code).digest('hex');
+
+    await this.otpModel.findOneAndUpdate(
+      { phone: normalizedPhone },
+      {
+        phone: normalizedPhone,
+        codeHash,
+        expiresAt,
+        lastSentAt: new Date(),
+        attempts: 0,
+      },
+      { upsert: true, new: true },
+    );
 
     if (!this.client || !this.fromNumber) {
       this.logger.debug(
@@ -108,19 +153,38 @@ export class OtpService {
     }
   }
 
-  verifyOtp(phone: string, code: string) {
+  async verifyOtp(phone: string, code: string) {
+    return this.verifyOtpAsync(phone, code);
+  }
+
+  private async verifyOtpAsync(phone: string, code: string) {
     const normalizedPhone = this.normalizePhoneNumber(phone);
     if (!normalizedPhone) {
       return false;
     }
-    const record = this.otpStore.get(normalizedPhone);
+    const record = await this.otpModel.findOne({ phone: normalizedPhone });
     if (!record) return false;
-    if (record.expiresAt < Date.now()) {
-      this.otpStore.delete(normalizedPhone);
+    if (record.expiresAt.getTime() < Date.now()) {
+      await this.otpModel.deleteOne({ phone: normalizedPhone });
       return false;
     }
-    const valid = record.code === code;
-    if (valid) this.otpStore.delete(normalizedPhone);
-    return valid;
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.otpModel.deleteOne({ phone: normalizedPhone });
+      return false;
+    }
+
+    const incomingHash = createHash('sha256').update(code).digest('hex');
+    const isValid = record.codeHash === incomingHash;
+
+    if (!isValid) {
+      await this.otpModel.updateOne(
+        { phone: normalizedPhone },
+        { $inc: { attempts: 1 } },
+      );
+      return false;
+    }
+
+    await this.otpModel.deleteOne({ phone: normalizedPhone });
+    return true;
   }
 }
