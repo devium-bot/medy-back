@@ -9,6 +9,7 @@ import { Model, Types } from 'mongoose';
 import { Friendship, FriendshipDocument } from './schemas/friendship.schema';
 import { UsersService } from '../users/users.service';
 import { RespondFriendRequestDto } from './dto/respond-friend-request.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class FriendsService {
@@ -16,7 +17,32 @@ export class FriendsService {
     @InjectModel(Friendship.name)
     private readonly friendshipModel: Model<FriendshipDocument>,
     private readonly usersService: UsersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  private mapFriendship(
+    doc: any,
+    currentUser: Types.ObjectId,
+  ) {
+    const requester = doc.requester as any;
+    const recipient = doc.recipient as any;
+    const requesterId = String(requester?._id ?? requester);
+    const recipientId = String(recipient?._id ?? recipient);
+    const isRequester = requesterId === String(currentUser);
+    const otherUser = isRequester ? recipient : requester;
+
+    return {
+      id: String(doc._id),
+      _id: doc._id,
+      status: doc.status,
+      createdAt: doc.createdAt,
+      respondedAt: doc.respondedAt,
+      requester,
+      recipient,
+      direction: isRequester ? 'outgoing' : 'incoming',
+      otherUser,
+    };
+  }
 
   private toObjectId(id: string) {
     if (!Types.ObjectId.isValid(id)) {
@@ -78,7 +104,16 @@ export class FriendsService {
       requester,
       recipient,
     });
-    return friendship;
+    // Notify recipient of friend request
+    await this.notificationsService.emit(recipient, 'friend_request', {
+      fromUserId: String(requester),
+    });
+    const populated = await this.friendshipModel
+      .findById(friendship._id)
+      .populate('requester', 'username firstName lastName email')
+      .populate('recipient', 'username firstName lastName email')
+      .lean();
+    return this.mapFriendship(populated, requester);
   }
 
   async listFriendships(
@@ -93,21 +128,23 @@ export class FriendsService {
       filter.status = status;
     }
 
-    return this.friendshipModel
+    const list = await this.friendshipModel
       .find(filter)
       .populate('requester', 'username firstName lastName email')
       .populate('recipient', 'username firstName lastName email')
       .sort({ createdAt: -1 })
       .lean();
+    return list.map((f) => this.mapFriendship(f, userObjectId));
   }
 
   async listPendingIncoming(userId: string) {
     const recipient = this.toObjectId(userId);
-    return this.friendshipModel
+    const pending = await this.friendshipModel
       .find({ recipient, status: 'pending' })
       .populate('requester', 'username firstName lastName email')
       .sort({ createdAt: -1 })
       .lean();
+    return pending.map((f) => this.mapFriendship(f, recipient));
   }
 
   async respondToRequest(
@@ -132,10 +169,22 @@ export class FriendsService {
       throw new ConflictException('Invitation déjà traitée');
     }
 
-    friendship.status = dto.action === 'accept' ? 'accepted' : 'declined';
+    const accepted = dto.action === 'accept';
+    friendship.status = accepted ? 'accepted' : 'declined';
     friendship.respondedAt = new Date();
     await friendship.save();
-    return friendship;
+    if (accepted) {
+      // Notify requester that friend request was accepted
+      await this.notificationsService.emit(friendship.requester, 'friend_accepted', {
+        byUserId: String(friendship.recipient),
+      });
+    }
+    const populated = await this.friendshipModel
+      .findById(friendshipId)
+      .populate('requester', 'username firstName lastName email')
+      .populate('recipient', 'username firstName lastName email')
+      .lean();
+    return this.mapFriendship(populated, userObjectId);
   }
 
   async removeFriend(userId: string, otherUserId: string) {
@@ -155,6 +204,6 @@ export class FriendsService {
     }
 
     await friendship.deleteOne();
-    return { success: true };
+    return { success: true, removedUserId: otherUserId };
   }
 }

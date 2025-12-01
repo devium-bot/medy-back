@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { WsAdapter } from '@nestjs/platform-ws';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,6 +22,9 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
   });
+
+  // WebSocket adapter (native ws)
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   // Permet de parser les requêtes JSON (activé par défaut, mais mieux d’être explicite)
   app.useGlobalPipes(

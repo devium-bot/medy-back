@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 import { SPECIALITIES, Speciality } from '../../common/specialities';
 
-export type UserDocument = User & Document;
+export type UserDocument = HydratedDocument<User>;
 
 export type AuthProvider = 'email' | 'google' | 'phone';
 
@@ -11,8 +11,12 @@ export type UserRole = 'user' | 'admin';
 @Schema({ timestamps: true })
 export class Subscription {
   @Prop() paymentDate?: Date;
+  @Prop() startDate?: Date;
   @Prop() endDate?: Date;
   @Prop({ default: 'expired' }) status?: 'active' | 'expired' | 'pending';
+  @Prop({ default: 'free' }) plan?: 'free' | 'premium';
+  @Prop({ default: 'manual' }) provider?: 'chargily' | 'iap' | 'manual';
+  @Prop() lastPaymentRef?: string;
 }
 
 export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);
@@ -29,6 +33,7 @@ export class Stats {
   @Prop({ default: 0 }) totalSkipped?: number;
   @Prop({ default: 0 }) totalTimeSpent?: number;
   @Prop({ default: null }) lastActivityAt?: Date;
+  @Prop({ default: 0 }) examLow30Count?: number;
 }
 
 export const StatsSchema = SchemaFactory.createForClass(Stats);
@@ -65,8 +70,20 @@ export class User {
   @Prop() lastName?: string;
   @Prop({ default: null }) studyYear?: number;
 
+  @Prop({ type: Date })
+  studyYearUpdatedAt?: Date;
+
+  @Prop({ default: 0 })
+  tokenVersion?: number;
+
   @Prop({ type: String, enum: SPECIALITIES, default: null })
   speciality?: Speciality;
+
+  @Prop({ default: true })
+  showPublicStats?: boolean;
+
+  @Prop({ default: true })
+  showPublicAchievements?: boolean;
 
   @Prop({
     type: [String],
@@ -86,6 +103,27 @@ export class User {
 
   @Prop({ type: StatsSchema, default: {} })
   stats?: Stats;
+
+  @Prop() avatarUrl?: string;
+
+  @Prop({ type: [String], default: [] })
+  badges?: string[];
+
+  @Prop({
+    type: {
+      dateISO: { type: String, default: () => new Date().toISOString().slice(0, 10) },
+      sessionsUsed: { type: Number, default: 0 },
+      questionsUsed: { type: Number, default: 0 },
+      aiRequestsUsed: { type: Number, default: 0 },
+    },
+    default: {},
+  })
+  usageDaily?: {
+    dateISO?: string;
+    sessionsUsed?: number;
+    questionsUsed?: number;
+    aiRequestsUsed?: number;
+  };
 
   @Prop({ default: Date.now }) createdAt?: Date;
   @Prop() updatedAt?: Date;

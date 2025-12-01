@@ -1,12 +1,5 @@
-import {
-  IsInt,
-  IsMongoId,
-  IsNotEmpty,
-  IsString,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsIn, IsInt, IsMongoId, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
+import { SPECIALITIES } from '../../../common/specialities';
 
 export class CreateModuleDto {
   @IsString()
@@ -17,6 +10,7 @@ export class CreateModuleDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
+  @IsIn(SPECIALITIES)
   speciality: string;
 
   @IsInt()

@@ -13,6 +13,7 @@ import { FriendsService } from './friends.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { RespondFriendRequestDto } from './dto/respond-friend-request.dto';
+import { ObjectIdPipe } from '../common/pipes/object-id.pipe';
 
 @UseGuards(JwtAuthGuard)
 @Controller('friends')
@@ -33,14 +34,17 @@ export class FriendsController {
   }
 
   @Post('requests/:userId')
-  async sendRequest(@GetUser() user: any, @Param('userId') userId: string) {
+  async sendRequest(
+    @GetUser() user: any,
+    @Param('userId', ObjectIdPipe) userId: string,
+  ) {
     return this.friendsService.sendFriendRequest(String(user._id), userId);
   }
 
   @Patch('requests/:id')
   async respond(
     @GetUser() user: any,
-    @Param('id') friendshipId: string,
+    @Param('id', ObjectIdPipe) friendshipId: string,
     @Body() dto: RespondFriendRequestDto,
   ) {
     return this.friendsService.respondToRequest(
@@ -51,7 +55,10 @@ export class FriendsController {
   }
 
   @Delete(':userId')
-  async remove(@GetUser() user: any, @Param('userId') otherUserId: string) {
+  async remove(
+    @GetUser() user: any,
+    @Param('userId', ObjectIdPipe) otherUserId: string,
+  ) {
     return this.friendsService.removeFriend(String(user._id), otherUserId);
   }
 }

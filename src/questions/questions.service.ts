@@ -135,6 +135,62 @@ export class QuestionsService {
       .exec();
   }
 
+  async getAvailableUniversities(filters: {
+    year?: number;
+    qcmYear?: number;
+    speciality?: string;
+    studyYear?: number;
+  } = {}) {
+    const query: any = {};
+
+    if (typeof filters.year === 'number' && !Number.isNaN(filters.year)) {
+      query.year = filters.year;
+    }
+    if (typeof filters.qcmYear === 'number' && !Number.isNaN(filters.qcmYear)) {
+      query.qcmYear = filters.qcmYear;
+    }
+
+    const speciality = filters.speciality?.toLowerCase?.() ?? filters.speciality;
+    if (speciality && SPECIALITIES.includes(speciality as any)) {
+      query.speciality = speciality;
+    }
+
+    if (typeof filters.studyYear === 'number' && !Number.isNaN(filters.studyYear)) {
+      query.year = filters.studyYear;
+    }
+
+    const values = await this.questionModel.distinct('university', query).exec();
+    return (values ?? [])
+      .filter((v) => typeof v === 'string' && v.trim().length > 0)
+      .map((v: string) => v.trim())
+      .sort((a: string, b: string) => a.localeCompare(b));
+  }
+
+  async getAvailableQcmYears(filters: {
+    speciality?: string;
+    studyYear?: number;
+    university?: string;
+  } = {}) {
+    const query: any = {};
+
+    const speciality = filters.speciality?.toLowerCase?.() ?? filters.speciality;
+    if (speciality && SPECIALITIES.includes(speciality as any)) {
+      query.speciality = speciality;
+    }
+    if (typeof filters.studyYear === 'number' && !Number.isNaN(filters.studyYear)) {
+      query.year = filters.studyYear;
+    }
+    if (filters.university) {
+      query.university = filters.university.trim();
+    }
+
+    const values = await this.questionModel.distinct('qcmYear', query).exec();
+    return (values ?? [])
+      .map((v: any) => (typeof v === 'number' ? v : Number(v)))
+      .filter((n) => Number.isFinite(n))
+      .sort((a: number, b: number) => b - a);
+  }
+
   async findById(id: string) {
     if (!Types.ObjectId.isValid(id)) {
       throw new BadRequestException('Identifiant invalide');

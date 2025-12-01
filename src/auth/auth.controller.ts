@@ -5,12 +5,15 @@ import {
   Get,
   BadRequestException,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterAdminDto } from './dto/register-admin.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GetUser } from './get-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -78,5 +81,22 @@ export class AuthController {
   @Post('verify-email/resend')
   async resendEmailVerification(@Body() dto: ResendVerificationDto) {
     return this.authService.resendVerification(dto.email);
+  }
+
+  @Post('verify-email/code')
+  async verifyEmailCode(
+    @Body('userId') userId: string,
+    @Body('code') code: string,
+  ) {
+    if (!userId || !code) {
+      throw new BadRequestException('Paramètres manquants');
+    }
+    return this.authService.verifyEmail(userId, code);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  async logoutAll(@GetUser() user) {
+    return this.authService.logoutAll(user.id ?? user._id);
   }
 }

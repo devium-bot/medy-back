@@ -24,6 +24,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       .findById(payload.sub)
       .select('-passwordHash');
     if (!user) return null;
+    const tokenVersion =
+      typeof payload.tokenVersion === 'number' ? payload.tokenVersion : 0;
+    if (typeof user.tokenVersion === 'number' && user.tokenVersion !== tokenVersion) {
+      return null;
+    }
     return user;
   }
 }

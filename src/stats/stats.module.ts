@@ -4,6 +4,7 @@ import { StatsService } from './stats.service';
 import { StatsController } from './stats.controller';
 import { QcmAttempt, QcmAttemptSchema } from './schemas/qcm-attempt.schema';
 import { UsersModule } from '../users/users.module';
+import { AchievementsModule } from '../achievements/achievements.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { UsersModule } from '../users/users.module';
       { name: QcmAttempt.name, schema: QcmAttemptSchema },
     ]),
     UsersModule,
+    AchievementsModule,
   ],
   controllers: [StatsController],
   providers: [StatsService],

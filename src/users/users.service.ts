@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class UsersService {
@@ -18,42 +19,107 @@ export class UsersService {
     return user;
   }
 
+  async findPublicProfile(id: string) {
+    const user = await this.userModel
+      .findById(id)
+      .select(
+        'username firstName lastName studyYear speciality avatarUrl badges stats createdAt showPublicStats showPublicAchievements',
+      )
+      .lean();
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
   async findByEmail(email: string) {
     const normalized = email.trim().toLowerCase();
     return this.userModel.findOne({ email: normalized }).select('-passwordHash');
   }
 
   async updateProfile(id: string, dto: UpdateUserDto) {
-    if (dto.username) {
+    const user = await this.userModel.findById(id).select('-passwordHash');
+    if (!user) throw new NotFoundException('User not found');
+
+    if (dto.username && dto.username !== user.username) {
       const exists = await this.userModel.findOne({
         username: dto.username,
         _id: { $ne: id },
       });
       if (exists) throw new ConflictException('Username already taken');
     }
+
+    const update: any = { ...dto };
+
+    if (
+      typeof dto.studyYear === 'number' &&
+      dto.studyYear !== user.studyYear &&
+      user.studyYear !== null &&
+      user.studyYear !== undefined
+    ) {
+      const lastChange = user.studyYearUpdatedAt;
+      const now = new Date();
+      if (lastChange) {
+        const diffMonths =
+          (now.getTime() - lastChange.getTime()) / (1000 * 60 * 60 * 24 * 30);
+        if (diffMonths < 11) {
+          throw new ConflictException('Modification de l\'année d\'étude autorisée après 11 mois.');
+        }
+      }
+      update.studyYearUpdatedAt = now;
+    }
+
+    if (
+      typeof dto.studyYear === 'number' &&
+      (user.studyYear === null || user.studyYear === undefined)
+    ) {
+      update.studyYearUpdatedAt = new Date();
+    }
+
     const updated = await this.userModel
-      .findByIdAndUpdate(id, { $set: dto }, { new: true })
+      .findByIdAndUpdate(id, { $set: update }, { new: true })
       .select('-passwordHash');
     return updated;
   }
 
   async setSubscription(userId: string, paymentDate: Date, months = 1) {
-    const start = paymentDate;
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + months);
+    // Admin helper: activate premium from now for N months
+    return this.applySubscription(userId, {
+      months,
+      paidAt: paymentDate,
+      provider: 'manual',
+      paymentRef: undefined,
+    });
+  }
 
-    const user = await this.userModel
+  async applySubscription(
+    userId: string,
+    opts: { months: number; paidAt: Date; provider: 'chargily' | 'iap' | 'manual'; paymentRef?: string },
+  ) {
+    const user = await this.userModel.findById(userId).select('subscription');
+    if (!user) throw new NotFoundException('User not found');
+
+    const now = opts.paidAt ?? new Date();
+    const sub = (user.subscription || {}) as any;
+    const hasActive = sub?.status === 'active' && sub?.endDate && new Date(sub.endDate).getTime() > Date.now();
+    const effectiveStart = hasActive ? new Date(sub.endDate) : now;
+    const newEnd = new Date(effectiveStart);
+    newEnd.setMonth(newEnd.getMonth() + Math.max(1, opts.months));
+
+    const updated = await this.userModel
       .findByIdAndUpdate(
         userId,
         {
-          'subscription.paymentDate': start,
-          'subscription.endDate': end,
+          'subscription.paymentDate': now,
+          'subscription.startDate': effectiveStart,
+          'subscription.endDate': newEnd,
           'subscription.status': 'active',
+          'subscription.plan': 'premium',
+          'subscription.provider': opts.provider,
+          'subscription.lastPaymentRef': opts.paymentRef,
         },
         { new: true },
       )
       .select('-passwordHash');
-    return user;
+    return updated;
   }
 
   async findByPhone(phone: string) {
@@ -178,5 +244,33 @@ export class UsersService {
       .select('-passwordHash');
 
     return updated?.stats ?? null;
+  }
+
+  async addFavoriteQuestion(userId: string, questionId: string) {
+    if (!Types.ObjectId.isValid(questionId)) {
+      throw new Error('Invalid question id');
+    }
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $addToSet: { 'favorites.questions': new Types.ObjectId(questionId) } },
+        { new: true },
+      )
+      .select('-passwordHash');
+    return updated?.favorites ?? { questions: [] };
+  }
+
+  async removeFavoriteQuestion(userId: string, questionId: string) {
+    if (!Types.ObjectId.isValid(questionId)) {
+      throw new Error('Invalid question id');
+    }
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $pull: { 'favorites.questions': new Types.ObjectId(questionId) } },
+        { new: true },
+      )
+      .select('-passwordHash');
+    return updated?.favorites ?? { questions: [] };
   }
 }

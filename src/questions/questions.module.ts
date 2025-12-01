@@ -10,6 +10,8 @@ import {
 } from '../categorie/modules/schema/module.schema';
 import { Cours, CoursSchema } from '../categorie/cours/schema/cours.schema';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { DailyUsageGuard } from '../common/guards/daily-usage.guard';
+import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [
@@ -18,9 +20,10 @@ import { RolesGuard } from '../auth/guards/roles.guard';
       { name: Unite.name, schema: UniteSchema },
       { name: ModuleEntity.name, schema: ModuleSchema },
       { name: Cours.name, schema: CoursSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [QuestionsController],
-  providers: [QuestionsService, RolesGuard],
+  providers: [QuestionsService, RolesGuard, DailyUsageGuard],
 })
 export class QuestionsModule {}

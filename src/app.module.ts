@@ -10,6 +10,12 @@ import { UsersModule } from './users/users.module';
 import { StatsModule } from './stats/stats.module';
 import { FriendsModule } from './friends/friends.module';
 import { MailModule } from './mail/mail.module';
+import { CoopModule } from './coop/coop.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { AchievementsModule } from './achievements/achievements.module';
+import { AiModule } from './ai/ai.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -42,24 +48,21 @@ import { MailModule } from './mail/mail.module';
           : '7d';
 
         const smtpHost = config.SMTP_HOST ? String(config.SMTP_HOST) : '';
-        if (!smtpHost) {
-          throw new Error('La variable SMTP_HOST est requise.');
-        }
-
         const smtpPortValue =
           config.SMTP_PORT !== undefined ? Number(config.SMTP_PORT) : 587;
-        if (Number.isNaN(smtpPortValue)) {
-          throw new Error('La variable SMTP_PORT doit être un nombre.');
-        }
-
         const smtpUser = config.SMTP_USER ? String(config.SMTP_USER) : '';
-        if (!smtpUser) {
-          throw new Error('La variable SMTP_USER est requise.');
-        }
-
         const smtpPass = config.SMTP_PASS ? String(config.SMTP_PASS) : '';
-        if (!smtpPass) {
-          throw new Error('La variable SMTP_PASS est requise.');
+        const resendKey = config.RESEND_API_KEY
+          ? String(config.RESEND_API_KEY)
+          : '';
+        const useResend = Boolean(resendKey);
+        const emailTransportOk =
+          useResend ||
+          (smtpHost && !Number.isNaN(smtpPortValue) && smtpUser && smtpPass);
+        if (!emailTransportOk) {
+          throw new Error(
+            'Configurez RESEND_API_KEY ou SMTP_HOST/PORT/USER/PASS pour l’envoi d’e-mails.',
+          );
         }
 
         const emailFrom = config.EMAIL_FROM ? String(config.EMAIL_FROM) : '';
@@ -67,13 +70,19 @@ import { MailModule } from './mail/mail.module';
           throw new Error('La variable EMAIL_FROM est requise.');
         }
 
+        const emailVerificationEnabled =
+          config.EMAIL_VERIFICATION_ENABLED !== undefined
+            ? String(config.EMAIL_VERIFICATION_ENABLED).toLowerCase() !== 'false'
+            : true;
+
         const verificationUrl = config.EMAIL_VERIFICATION_URL
           ? String(config.EMAIL_VERIFICATION_URL)
           : '';
-        if (!verificationUrl) {
+        if (emailVerificationEnabled && !verificationUrl) {
           throw new Error('La variable EMAIL_VERIFICATION_URL est requise.');
         }
 
+        // Expose validated + optional keys to ConfigService
         return {
           MONGO_URI: mongoUri,
           PORT: portValue,
@@ -83,12 +92,37 @@ import { MailModule } from './mail/mail.module';
           ALLOWED_ORIGINS: allowedOrigins,
           JWT_SECRET: jwtSecret,
           JWT_EXPIRES_IN: jwtExpiresIn,
-          SMTP_HOST: smtpHost,
-          SMTP_PORT: smtpPortValue,
-          SMTP_USER: smtpUser,
-          SMTP_PASS: smtpPass,
+          SMTP_HOST: smtpHost || undefined,
+          SMTP_PORT: Number.isNaN(smtpPortValue) ? undefined : smtpPortValue,
+          SMTP_USER: smtpUser || undefined,
+          SMTP_PASS: smtpPass || undefined,
+          RESEND_API_KEY: resendKey || undefined,
           EMAIL_FROM: emailFrom,
           EMAIL_VERIFICATION_URL: verificationUrl,
+          EMAIL_VERIFICATION_ENABLED: emailVerificationEnabled,
+          // AI (optionnels)
+          AI_PROVIDER: config.AI_PROVIDER ? String(config.AI_PROVIDER) : undefined,
+          HF_API_TOKEN: config.HF_API_TOKEN ? String(config.HF_API_TOKEN) : undefined,
+          AI_MODEL: config.AI_MODEL ? String(config.AI_MODEL) : undefined,
+          HF_TEXT_MODEL: config.HF_TEXT_MODEL ? String(config.HF_TEXT_MODEL) : undefined,
+          // HF Inference Providers (optionnels)
+          HF_PROVIDER: config.HF_PROVIDER ? String(config.HF_PROVIDER) : undefined,
+          HF_ENDPOINT_URL: config.HF_ENDPOINT_URL ? String(config.HF_ENDPOINT_URL) : undefined,
+          HF_BASE_URL: config.HF_BASE_URL ? String(config.HF_BASE_URL) : undefined,
+          IP_PROVIDER: config.IP_PROVIDER ? String(config.IP_PROVIDER) : undefined,
+          IP_MODEL: config.IP_MODEL ? String(config.IP_MODEL) : undefined,
+          // Groq (optionnels)
+          GROQ_API_KEY: config.GROQ_API_KEY ? String(config.GROQ_API_KEY) : undefined,
+          GROQ_MODEL: config.GROQ_MODEL ? String(config.GROQ_MODEL) : undefined,
+          AI_MAX_DAILY_PER_USER:
+            config.AI_MAX_DAILY_PER_USER !== undefined
+              ? Number(config.AI_MAX_DAILY_PER_USER)
+              : undefined,
+          // Replicate (optionnels)
+          REPLICATE_API_TOKEN: config.REPLICATE_API_TOKEN ? String(config.REPLICATE_API_TOKEN) : undefined,
+          REPLICATE_MODEL: config.REPLICATE_MODEL ? String(config.REPLICATE_MODEL) : undefined,
+          REPLICATE_VERSION: config.REPLICATE_VERSION ? String(config.REPLICATE_VERSION) : undefined,
+          REPLICATE_BASE_URL: config.REPLICATE_BASE_URL ? String(config.REPLICATE_BASE_URL) : undefined,
         };
       },
     }),
@@ -111,6 +145,12 @@ import { MailModule } from './mail/mail.module';
     StatsModule,
     FriendsModule,
     MailModule,
+    CoopModule,
+    NotificationsModule,
+    RealtimeModule,
+    AchievementsModule,
+    AiModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

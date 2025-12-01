@@ -21,6 +21,7 @@ import { createHash, randomBytes } from 'crypto';
 @Injectable()
 export class AuthService {
   private readonly emailTokenExpiresInMinutes = 60;
+  private readonly emailVerificationEnabled: boolean;
 
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
@@ -29,7 +30,10 @@ export class AuthService {
     private otpService: OtpService,
     private usersService: UsersService,
     private mailService: MailService,
-  ) {}
+  ) {
+    this.emailVerificationEnabled =
+      this.configService.get<boolean>('EMAIL_VERIFICATION_ENABLED') ?? true;
+  }
 
   async registerLocal(dto: RegisterDto) {
     const {
@@ -63,15 +67,20 @@ export class AuthService {
       speciality,
       authProvider: ['email'],
       role: 'user',
-      isVerified: false,
+      isVerified: !this.emailVerificationEnabled,
+      verifiedAt: this.emailVerificationEnabled ? undefined : new Date(),
     } as any);
 
-    await this.issueEmailVerificationToken(created, normalizedEmail);
+    if (this.emailVerificationEnabled) {
+      await this.issueEmailVerificationToken(created, normalizedEmail);
+    }
 
     return {
       message:
-        'Inscription réussie. Vérifiez votre boîte mail pour confirmer votre adresse.',
-      requiresVerification: true,
+        this.emailVerificationEnabled
+          ? 'Inscription réussie. Vérifiez votre boîte mail pour confirmer votre adresse.'
+          : 'Inscription réussie. Vous pouvez vous connecter.',
+      requiresVerification: this.emailVerificationEnabled,
       userId: String(created._id),
     };
   }
@@ -121,7 +130,7 @@ export class AuthService {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
-    if (!user.isVerified) {
+    if (this.emailVerificationEnabled && !user.isVerified) {
       throw new UnauthorizedException(
         'Email non vérifié. Veuillez confirmer votre adresse.',
       );
@@ -144,12 +153,15 @@ export class AuthService {
 
   signUser(user: UserDocument | any) {
     const id = user._id ? String(user._id) : undefined;
+    const tokenVersion =
+      typeof user.tokenVersion === 'number' ? user.tokenVersion : 0;
 
     const payload = {
       sub: id,
       email: user.email ?? null,
       provider: user.authProvider ?? null,
       role: user.role ?? 'user',
+      tokenVersion,
     };
     const token = this.jwtService.sign(payload);
 
@@ -164,10 +176,13 @@ export class AuthService {
         lastName: user.lastName ?? null,
         studyYear: user.studyYear ?? null,
         speciality: user.speciality ?? null,
+        showPublicStats: user.showPublicStats ?? true,
+        showPublicAchievements: user.showPublicAchievements ?? true,
         authProvider: Array.isArray(user.authProvider) ? user.authProvider : [],
         role: user.role ?? 'user',
         isVerified: Boolean(user.isVerified),
         verifiedAt: user.verifiedAt ?? null,
+        tokenVersion,
       },
     };
   }
@@ -264,6 +279,41 @@ export class AuthService {
   }
 
   async verifyEmail(userId: string, token: string) {
+    if (!this.emailVerificationEnabled) {
+      if (!Types.ObjectId.isValid(userId)) {
+        throw new BadRequestException('Lien de vérification invalide.');
+      }
+      let user = await this.userModel
+        .findById(userId)
+        .select('-passwordHash')
+        .lean();
+      if (!user) {
+        throw new NotFoundException('Utilisateur introuvable.');
+      }
+      if (!user.isVerified) {
+        await this.userModel.findByIdAndUpdate(userId, {
+          isVerified: true,
+          verifiedAt: new Date(),
+          $unset: {
+            verificationTokenHash: 1,
+            verificationTokenExpiresAt: 1,
+          },
+        });
+        user = await this.userModel
+          .findById(userId)
+          .select('-passwordHash')
+          .lean();
+        if (!user) {
+          throw new NotFoundException('Utilisateur introuvable.');
+        }
+      }
+      return this.signUser({
+        ...user,
+        isVerified: true,
+        verifiedAt: user.verifiedAt ?? new Date(),
+      });
+    }
+
     if (!Types.ObjectId.isValid(userId)) {
       throw new BadRequestException('Lien de vérification invalide.');
     }
@@ -323,6 +373,11 @@ export class AuthService {
   }
 
   async resendVerification(email: string) {
+    if (!this.emailVerificationEnabled) {
+      throw new BadRequestException(
+        'La vérification des e-mails est désactivée.',
+      );
+    }
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.userModel
       .findOne({ email: normalizedEmail })
@@ -346,10 +401,29 @@ export class AuthService {
     };
   }
 
+  async logoutAll(userId: string) {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new BadRequestException('Utilisateur invalide.');
+    }
+    const updated = await this.userModel.findByIdAndUpdate(
+      userId,
+      { $inc: { tokenVersion: 1 } },
+      { new: true },
+    );
+    if (!updated) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+    return { success: true };
+  }
+
   private async issueEmailVerificationToken(
     user: UserDocument,
     email: string,
   ) {
+    if (!this.emailVerificationEnabled) {
+      return;
+    }
+
     const recipient = email.trim().toLowerCase();
     if (!recipient) {
       throw new BadRequestException(
@@ -357,7 +431,7 @@ export class AuthService {
       );
     }
 
-    const rawToken = randomBytes(48).toString('hex');
+    const rawToken = String(Math.floor(100000 + Math.random() * 900000));
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(
       Date.now() + this.emailTokenExpiresInMinutes * 60 * 1000,
@@ -380,6 +454,7 @@ export class AuthService {
     await this.mailService.sendEmailVerification({
       to: recipient,
       verificationLink,
+      token: rawToken.slice(0, 6),
       username: user.username,
       expiresInMinutes: this.emailTokenExpiresInMinutes,
     });

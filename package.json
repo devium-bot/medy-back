@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:users": "ts-node seed.ts",
-    "admin:create": "ts-node scripts/create-admin.ts"
+    "admin:create": "ts-node scripts/create-admin.ts",
+    "ai:test": "ts-node scripts/ai-smoke.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
@@ -29,19 +30,22 @@
     "@nestjs/mongoose": "^11.0.3",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/platform-ws": "^11.1.7",
+    "@nestjs/websockets": "^11.1.7",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
-    "nodemailer": "^6.9.16",
     "google-auth-library": "^10.3.0",
     "googleapis": "^159.0.0",
     "mongoose": "^8.18.1",
+    "nodemailer": "^6.10.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "twilio": "^5.9.0"
+    "twilio": "^5.9.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

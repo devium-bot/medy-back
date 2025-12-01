@@ -31,14 +31,57 @@ export class OtpService {
     }
   }
 
+  private normalizePhoneNumber(rawPhone: string) {
+    if (!rawPhone) {
+      return null;
+    }
+
+    const trimmed = rawPhone.trim();
+    if (trimmed.startsWith('+')) {
+      return trimmed;
+    }
+
+    // Handle Algerian numbers: 0XXXXXXXXX -> +213XXXXXXXXX
+    const algerianLocal = /^0(\d{9})$/;
+    if (algerianLocal.test(trimmed)) {
+      return `+213${trimmed.slice(1)}`;
+    }
+
+    const algerianWithoutZero = /^213(\d{9})$/;
+    if (algerianWithoutZero.test(trimmed)) {
+      return `+${trimmed}`;
+    }
+
+    // Already contains international prefix like 00213...
+    const internationalPrefix = /^00\d+$/;
+    if (internationalPrefix.test(trimmed)) {
+      return `+${trimmed.slice(2)}`;
+    }
+
+    this.logger.warn(
+      `Format du numéro inattendu (${trimmed}). Assurez-vous d'utiliser le format national (0XXXXXXXXX) ou international (+213XXXXXXXXX).`,
+    );
+    return trimmed;
+  }
+
   async sendOtp(phone: string) {
+    const normalizedPhone = this.normalizePhoneNumber(phone);
+    if (!normalizedPhone) {
+      return {
+        success: false,
+        error: 'Numéro de téléphone invalide.',
+      };
+    }
+
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // OTP 6 chiffres
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min de validité
 
-    this.otpStore.set(phone, { code, expiresAt });
+    this.otpStore.set(normalizedPhone, { code, expiresAt });
 
     if (!this.client || !this.fromNumber) {
-      this.logger.debug(`OTP généré pour ${phone} (mode sans SMS): ${code}`);
+      this.logger.debug(
+        `OTP généré pour ${normalizedPhone} (mode sans SMS): ${code}`,
+      );
       return {
         success: true,
         sid: 'local-fallback',
@@ -50,7 +93,7 @@ export class OtpService {
       const message = await this.client.messages.create({
         body: `Votre code OTP est : ${code}`,
         from: this.fromNumber,
-        to: phone,
+        to: normalizedPhone,
       });
 
       return { success: true, sid: message.sid };
@@ -66,14 +109,18 @@ export class OtpService {
   }
 
   verifyOtp(phone: string, code: string) {
-    const record = this.otpStore.get(phone);
+    const normalizedPhone = this.normalizePhoneNumber(phone);
+    if (!normalizedPhone) {
+      return false;
+    }
+    const record = this.otpStore.get(normalizedPhone);
     if (!record) return false;
     if (record.expiresAt < Date.now()) {
-      this.otpStore.delete(phone);
+      this.otpStore.delete(normalizedPhone);
       return false;
     }
     const valid = record.code === code;
-    if (valid) this.otpStore.delete(phone);
+    if (valid) this.otpStore.delete(normalizedPhone);
     return valid;
   }
 }
