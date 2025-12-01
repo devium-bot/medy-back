@@ -26,16 +26,18 @@ async function bootstrap() {
   // WebSocket adapter (native ws)
   app.useWebSocketAdapter(new WsAdapter(app));
 
-  // Permet de parser les requêtes JSON (activé par défaut, mais mieux d’être explicite)
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Supprime les propriétés inconnues
-      forbidNonWhitelisted: true, // Erreur si des propriétés inconnues sont envoyées
-      transform: true, // Transforme les types automatiquement
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
-  const port = configService.get<number>('PORT', 3000);
+  // Render utilise process.env.PORT dynamiquement
+  const port = process.env.PORT || configService.get<number>('PORT', 3000);
   await app.listen(port, '0.0.0.0');
+  
+  console.log(`🚀 Application is running on port ${port}`);
 }
 bootstrap();
