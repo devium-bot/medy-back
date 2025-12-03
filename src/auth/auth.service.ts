@@ -137,9 +137,13 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     if (this.emailVerificationEnabled && !user.isVerified) {
-      throw new UnauthorizedException(
-        'Email non vérifié. Veuillez confirmer votre adresse.',
-      );
+      throw new UnauthorizedException({
+        message: 'Email non vérifié. Veuillez confirmer votre adresse.',
+        code: 'EMAIL_NOT_VERIFIED',
+        requiresVerification: true,
+        userId: String(user._id),
+        email: user.email ?? normalizedEmail,
+      });
     }
 
     return user;

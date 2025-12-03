@@ -34,26 +34,23 @@ export class UsersController {
 
   // Expose daily usage and plan to the client
   @Get('me/usage')
-  getUsage(@GetUser() user) {
-    const sub = (user.subscription ?? {}) as any;
-    const usage = (user.usageDaily ?? {}) as any;
+  async getUsage(@GetUser() user) {
+    // Always refetch to avoid stale subscription info from JWT payload
+    const freshUser = await this.usersService.findById(user._id);
+    const sub = (freshUser.subscription ?? {}) as any;
+    const usage = (freshUser.usageDaily ?? {}) as any;
     const today = new Date().toISOString().slice(0, 10);
     const dateISO = usage?.dateISO === today ? usage.dateISO : today;
     const sessionsUsed = usage?.dateISO === today ? Number(usage.sessionsUsed ?? 0) : 0;
     const questionsUsed = usage?.dateISO === today ? Number(usage.questionsUsed ?? 0) : 0;
     const sessionsLimit = 2;
     const questionsPerSessionLimit = 3;
-    const isPremium = (() => {
-      if ((user.role as any) === 'admin') return true;
-      if (sub?.plan === 'premium' && sub?.status === 'active') {
-        if (!sub?.endDate) return true;
-        return new Date(sub.endDate).getTime() > Date.now();
-      }
-      if (sub?.status === 'active' && sub?.endDate) {
-        return new Date(sub.endDate).getTime() > Date.now();
-      }
-      return false;
-    })();
+    const nowMs = Date.now();
+    const endMs = sub?.endDate ? new Date(sub.endDate).getTime() : undefined;
+    const hasFutureEnd = endMs === undefined || endMs > nowMs;
+    const isPremium =
+      (freshUser.role as any) === 'admin' ||
+      (hasFutureEnd && (sub?.status === 'active' || sub?.plan === 'premium'));
 
     return {
       plan: isPremium ? 'premium' : (sub?.plan ?? 'free'),

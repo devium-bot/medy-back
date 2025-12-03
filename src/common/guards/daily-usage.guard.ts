@@ -83,14 +83,10 @@ export class DailyUsageGuard implements CanActivate {
   private isPremium(user: UserDocument, now: Date) {
     const sub = user.subscription as any;
     if (!sub) return false;
-    if (sub.plan === 'premium' && sub.status === 'active') {
-      if (!sub.endDate) return true;
-      return new Date(sub.endDate).getTime() > now.getTime();
-    }
-    // Also accept status active with endDate in future even if plan missing
-    if (sub.status === 'active' && sub.endDate) {
-      return new Date(sub.endDate).getTime() > now.getTime();
-    }
-    return false;
+    const nowMs = now.getTime();
+    const endMs = sub.endDate ? new Date(sub.endDate).getTime() : undefined;
+    const hasFutureEnd = endMs === undefined || endMs > nowMs;
+    // Consider premium if either status is active or plan is premium and the end date is not expired (or missing)
+    return hasFutureEnd && (sub.status === 'active' || sub.plan === 'premium');
   }
 }

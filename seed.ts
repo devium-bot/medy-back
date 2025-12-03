@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { connect, disconnect, model, Types, Schema } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
+import { readFileSync } from 'fs';
+import * as path from 'path';
 
 import { User, UserSchema } from './src/users/schemas/user.schema';
 import { Unite, UniteSchema } from './src/categorie/unites/schema/unite.schema';
@@ -82,6 +84,12 @@ const qcmYearsPool = [
   currentYear - 3,
   currentYear - 4,
 ];
+
+const REALISTIC_QCM_FILE = path.join(
+  __dirname,
+  'qcm_100_medecine_realistes.json',
+);
+const LETTER_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 const rand = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
@@ -881,50 +889,78 @@ async function seed() {
       console.log('🤝 Amis injectés');
     }
 
-    const uniBySpec: Record<string, string> = {
-      medecine: 'UM1',
-      pharmacie: 'USTHB',
-      dentaire: 'Paris-Saclay',
-    };
-
     // =========================
-    // INSERTION DU CATALOGUE
+    // QCM réalistes (JSON)
     // =========================
-    for (const entry of catalog) {
-      const uniteDoc = await UniteModel.create(entry.unite);
+    const realisticPath = REALISTIC_QCM_FILE;
+    const rawRealistic = JSON.parse(
+      readFileSync(realisticPath, 'utf8'),
+    ) as { qcm?: any[] };
+    const realisticQcm = Array.isArray(rawRealistic?.qcm)
+      ? rawRealistic.qcm
+      : [];
 
-      for (const moduleEntry of entry.modules) {
-        const moduleDoc = await ModuleModel.create({
-          nom: moduleEntry.nom,
-          speciality: entry.unite.speciality,
-          studyYear: entry.unite.studyYear,
-          unite: uniteDoc._id,
-        });
+    const realisticStudyYear = 1;
+    const realisticQcmYear = currentYear;
+    const realisticSpeciality: 'medecine' = 'medecine';
 
-        for (const courseEntry of moduleEntry.courses) {
-          const coursDoc = await CoursModel.create({
-            nom: courseEntry.nom,
-            studyYear: entry.unite.studyYear,
-            module: moduleDoc._id,
-          });
+    const realUnite = await UniteModel.create({
+      nom: 'QCM Médecine — Réalistes',
+      speciality: realisticSpeciality,
+      studyYear: realisticStudyYear,
+    });
 
-          const questionsToInsert = courseEntry.questions.map((question) => ({
-            ...question,
-            speciality: entry.unite.speciality,
-            unite: uniteDoc._id,
-            module: moduleDoc._id,
-            cours: coursDoc._id,
-            year: entry.unite.studyYear,
-            qcmYear: currentYear,
-            university: uniBySpec[entry.unite.speciality] ?? 'UM1',
-          }));
+    const realModule = await ModuleModel.create({
+      nom: 'Pathologies réalistes',
+      speciality: realisticSpeciality,
+      studyYear: realisticStudyYear,
+      unite: realUnite._id,
+    });
 
-          await QuestionModel.insertMany(questionsToInsert);
-        }
-      }
+    const realCours = await CoursModel.create({
+      nom: 'Série réaliste 2025',
+      studyYear: realisticStudyYear,
+      module: realModule._id,
+    });
+
+    const realisticDocs = realisticQcm.map((item, idx) => {
+      const optionsOrdered = LETTER_ORDER.filter((key) =>
+        item?.options && Object.prototype.hasOwnProperty.call(item.options, key),
+      ).map((key) => String(item.options[key]));
+
+      const correctAnswerIndexes = Array.from(
+        new Set(
+          (item?.correctAnswers ?? []).map((letter: string) =>
+            LETTER_ORDER.indexOf(String(letter).trim().toUpperCase()),
+          ),
+        ),
+      ).filter((pos: number) => Number.isFinite(pos) && pos >= 0 && pos < optionsOrdered.length);
+
+      return {
+        questionText:
+          item?.question ??
+          item?.questionText ??
+          `Question ${idx + 1}`,
+        options: optionsOrdered,
+        correctAnswer: correctAnswerIndexes,
+        unite: realUnite._id,
+        module: realModule._id,
+        cours: realCours._id,
+        speciality: realisticSpeciality,
+        year: realisticStudyYear,
+        qcmYear: item?.qcmYear ?? realisticQcmYear,
+        university: 'UM1',
+      };
+    });
+
+    if (realisticDocs.length) {
+      await QuestionModel.insertMany(realisticDocs);
+      console.log(
+        `📚 QCM réalistes importés (${realisticDocs.length} questions)`,
+      );
+    } else {
+      console.warn('⚠️  Aucun QCM réaliste trouvé dans le JSON.');
     }
-
-    console.log('🎯 Catalogue académique réaliste injecté');
 
     // -------------------------------------------------
     // Utilisateur de test NON vérifié + lien à valider
@@ -961,185 +997,6 @@ async function seed() {
     console.log('    Lien de vérification (copiez/collez dans le navigateur):');
     console.log('    ', verifyLink);
 
-    // ==========================
-    // Données de test supplémentaires simples
-    // ==========================
-    const extraUnites: Types.ObjectId[] = [];
-    for (let i = 1; i <= 10; i++) {
-      const speciality = SPECIALITIES[i % SPECIALITIES.length];
-      const studyYear = (i % 7) + 1;
-      const unite = await UniteModel.create({
-        nom: `Unité Démo ${i}`,
-        speciality,
-        studyYear,
-      });
-      extraUnites.push(unite._id);
-    }
-
-    const extraModules: Types.ObjectId[] = [];
-    for (let i = 1; i <= 10; i++) {
-      const uniteId = extraUnites[(i - 1) % extraUnites.length];
-      const uniteDoc = await UniteModel.findById(uniteId).lean();
-      if (!uniteDoc) continue;
-      const moduleDoc = await ModuleModel.create({
-        nom: `Module Démo ${i}`,
-        speciality: uniteDoc.speciality,
-        studyYear: uniteDoc.studyYear,
-        unite: uniteId,
-      });
-      extraModules.push(moduleDoc._id);
-    }
-
-    const extraCourses: Types.ObjectId[] = [];
-    for (let i = 1; i <= 10; i++) {
-      const moduleId = extraModules[(i - 1) % extraModules.length];
-      const moduleDoc = await ModuleModel.findById(moduleId).lean();
-      if (!moduleDoc) continue;
-      const coursDoc = await CoursModel.create({
-        nom: `Cours Démo ${i}`,
-        studyYear: moduleDoc.studyYear,
-        module: moduleId,
-      });
-      extraCourses.push(coursDoc._id);
-    }
-
-    const sampleQuestions = [
-      {
-        questionText:
-          "Question démo: Quelle est la capitale de la France ?",
-        options: ['Lyon', 'Marseille', 'Paris', 'Nice'],
-        correctAnswer: [2],
-      },
-      {
-        questionText: 'Question démo: 2 + 2 = ?',
-        options: ['3', '4', '5', '22'],
-        correctAnswer: [1],
-      },
-      {
-        questionText:
-          "Question démo: La molécule d'eau est composée de ?",
-        options: ['H2O', 'CO2', 'O2', 'H2'],
-        correctAnswer: [0],
-      },
-      {
-        questionText:
-          'Question démo: Le cœur humain possède ?',
-        options: ['2 cavités', '3 cavités', '4 cavités', '5 cavités'],
-        correctAnswer: [2],
-      },
-    ];
-
-    let createdCount = 0;
-    for (let i = 0; i < extraCourses.length; i++) {
-      const coursId = extraCourses[i];
-      const coursDoc = await CoursModel.findById(coursId).lean();
-      if (!coursDoc) continue;
-      const moduleDoc = await ModuleModel.findById(coursDoc.module).lean();
-      if (!moduleDoc) continue;
-      const uniteDoc = await UniteModel.findById(moduleDoc.unite).lean();
-      if (!uniteDoc) continue;
-
-      const qcmYear = i % 2 === 0 ? currentYear : currentYear - 1;
-      const university =
-        i % 3 === 0 ? 'UM1' : i % 3 === 1 ? 'USTHB' : 'Paris-Saclay';
-
-      const pack = [
-        sampleQuestions[i % sampleQuestions.length],
-        sampleQuestions[(i + 1) % sampleQuestions.length],
-      ];
-      const docs = pack.map((q) => ({
-        ...q,
-        speciality: uniteDoc.speciality,
-        unite: uniteDoc._id,
-        module: moduleDoc._id,
-        cours: coursDoc._id,
-        year: uniteDoc.studyYear,
-        qcmYear,
-        university,
-      }));
-      const inserted = await QuestionModel.insertMany(docs);
-      createdCount += inserted.length;
-      if (createdCount >= 20) break;
-    }
-
-    console.log(
-      `🧪 Données démo ajoutées: 10 unités, 10 modules, 10 cours, ${createdCount} questions`,
-    );
-
-    // ==========================
-    // Burst de données mockées
-    // ==========================
-    const BULK_UNITES = BULK_UNITES_PER_SPEC;
-    let bulkQuestions = 0;
-
-    for (const speciality of SPECIALITIES) {
-      for (let u = 1; u <= BULK_UNITES; u++) {
-        const studyYear = (u % 7) + 1;
-        const unite = await UniteModel.create({
-          nom: `Unité ${speciality.toUpperCase()} ${u}`,
-          speciality,
-          studyYear,
-        });
-
-        for (let m = 1; m <= MODULES_PER_UNITE; m++) {
-          const moduleDoc = await ModuleModel.create({
-            nom: `Module ${u}.${m}`,
-            speciality,
-            studyYear,
-            unite: unite._id,
-          });
-
-          for (let c = 1; c <= COURSES_PER_MODULE; c++) {
-            const coursDoc = await CoursModel.create({
-              nom: `Cours ${u}.${m}.${c}`,
-              studyYear,
-              module: moduleDoc._id,
-            });
-
-            const docs: any[] = [];
-            for (let q = 1; q <= QUESTIONS_PER_COURSE; q++) {
-              const optionCount = rand(4, 6);
-              const options = Array.from(
-                { length: optionCount },
-                (_, i) => `Option ${i + 1}`,
-              );
-              const indexPool = Array.from(
-                { length: optionCount },
-                (_, i) => i,
-              );
-              const multi = Math.random() < 0.3;
-              const correctAnswer = multi
-                ? pickMany(
-                    rand(2, Math.min(3, optionCount)),
-                    indexPool,
-                  )
-                : [pick(indexPool)];
-
-              docs.push({
-                questionText: `(${speciality}) Q${u}.${m}.${c}.${q} — Thème démo`,
-                options,
-                correctAnswer,
-                unite: unite._id,
-                module: moduleDoc._id,
-                cours: coursDoc._id,
-                speciality,
-                year: studyYear,
-                qcmYear: pick(qcmYearsPool),
-                university: pick(universities),
-              });
-            }
-            await QuestionModel.insertMany(docs);
-            bulkQuestions += docs.length;
-          }
-        }
-      }
-    }
-
-    console.log(
-      `📊 Burst mock: +${BULK_UNITES * SPECIALITIES.length} unités, +${
-        BULK_UNITES * MODULES_PER_UNITE * SPECIALITIES.length
-      } modules (x${COURSES_PER_MODULE}/u), +${bulkQuestions} questions`,
-    );
   } catch (error) {
     console.error('❌ Erreur lors du seed :', error);
   } finally {
