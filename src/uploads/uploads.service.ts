@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
-import type { Express } from 'express';
+import type { Multer } from 'multer';
 
 @Injectable()
 export class UploadsService {
@@ -24,7 +24,7 @@ export class UploadsService {
     }
   }
 
-  uploadAvatar(file: Express.Multer.File, userId?: string) {
+  uploadAvatar(file: Multer.File, userId?: string) {
     return new Promise<{ secure_url: string }>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -50,7 +50,7 @@ export class UploadsService {
     });
   }
 
-  uploadReport(file: Express.Multer.File, userId?: string) {
+  uploadReport(file: Multer.File, userId?: string) {
     return new Promise<{ secure_url: string }>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
