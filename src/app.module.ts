@@ -16,6 +16,8 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { AiModule } from './ai/ai.module';
 import { PaymentsModule } from './payments/payments.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -124,6 +126,11 @@ import { PaymentsModule } from './payments/payments.module';
           throw new Error('La variable EMAIL_VERIFICATION_URL est requise.');
         }
 
+        const cloudinaryUrl = config.CLOUDINARY_URL ? String(config.CLOUDINARY_URL) : undefined;
+        const cloudName = config.CLOUDINARY_CLOUD_NAME ? String(config.CLOUDINARY_CLOUD_NAME) : undefined;
+        const cloudApiKey = config.CLOUDINARY_API_KEY ? String(config.CLOUDINARY_API_KEY) : undefined;
+        const cloudApiSecret = config.CLOUDINARY_API_SECRET ? String(config.CLOUDINARY_API_SECRET) : undefined;
+
         // Expose validated + optional keys to ConfigService
         return {
           MONGO_URI: mongoUri,
@@ -166,6 +173,11 @@ import { PaymentsModule } from './payments/payments.module';
           REPLICATE_MODEL: config.REPLICATE_MODEL ? String(config.REPLICATE_MODEL) : undefined,
           REPLICATE_VERSION: config.REPLICATE_VERSION ? String(config.REPLICATE_VERSION) : undefined,
           REPLICATE_BASE_URL: config.REPLICATE_BASE_URL ? String(config.REPLICATE_BASE_URL) : undefined,
+          // Cloudinary (optionnels)
+          CLOUDINARY_URL: cloudinaryUrl,
+          CLOUDINARY_CLOUD_NAME: cloudName,
+          CLOUDINARY_API_KEY: cloudApiKey,
+          CLOUDINARY_API_SECRET: cloudApiSecret,
         };
       },
     }),
@@ -194,6 +206,8 @@ import { PaymentsModule } from './payments/payments.module';
     AchievementsModule,
     AiModule,
     PaymentsModule,
+    UploadsModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

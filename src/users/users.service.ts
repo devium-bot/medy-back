@@ -2,12 +2,15 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Types } from 'mongoose';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -76,6 +79,53 @@ export class UsersService {
       .findByIdAndUpdate(id, { $set: update }, { new: true })
       .select('-passwordHash');
     return updated;
+  }
+
+  async deleteAccount(id: string, password: string) {
+    const user = await this.userModel
+      .findById(id)
+      .select('+passwordHash');
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!password || typeof password !== 'string') {
+      throw new BadRequestException('Mot de passe requis pour supprimer le compte.');
+    }
+    if (!user.passwordHash) {
+      throw new ConflictException('Ce compte ne possède pas de mot de passe. Connectez-vous avec la méthode utilisée à la création pour demander la suppression.');
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Mot de passe invalide.');
+    }
+
+    const now = new Date();
+    const anonymizedEmail = user.email
+      ? `deleted+${now.getTime()}+${user.email}`
+      : undefined;
+    const anonymizedUsername = `deleted_${user.username}_${now.getTime()}`;
+
+    await this.userModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          email: anonymizedEmail,
+          username: anonymizedUsername,
+          passwordHash: null,
+          isVerified: false,
+          deletedAt: now,
+          deletionMeta: {
+            email: user.email ?? null,
+            username: user.username ?? null,
+            reason: 'user_request',
+            at: now,
+          },
+        },
+      },
+      { new: true },
+    );
+
+    return { success: true, deletedAt: now };
   }
 
   async setSubscription(userId: string, paymentDate: Date, months = 1) {

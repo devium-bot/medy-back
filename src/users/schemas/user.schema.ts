@@ -73,6 +73,27 @@ export class User {
   @Prop({ type: Date })
   studyYearUpdatedAt?: Date;
 
+  @Prop({ default: null })
+  deletedAt?: Date;
+
+  @Prop({
+    type: {
+      email: { type: String },
+      username: { type: String },
+      reason: { type: String },
+      note: { type: String },
+      at: { type: Date },
+    },
+    default: null,
+  })
+  deletionMeta?: {
+    email?: string;
+    username?: string;
+    reason?: string;
+    note?: string;
+    at?: Date;
+  };
+
   @Prop({ default: 0 })
   tokenVersion?: number;
 

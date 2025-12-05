@@ -32,6 +32,11 @@ export class UsersController {
     return this.usersService.updateProfile(user._id, dto);
   }
 
+  @Delete('me')
+  deleteMe(@GetUser() user, @Body('password') password: string) {
+    return this.usersService.deleteAccount(user._id, password);
+  }
+
   // Expose daily usage and plan to the client
   @Get('me/usage')
   async getUsage(@GetUser() user) {
