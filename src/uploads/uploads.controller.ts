@@ -11,7 +11,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
 import { memoryStorage } from 'multer';
 import { GetUser } from '../auth/get-user.decorator';
-import type { Multer } from 'multer';
+import type { File } from 'multer';
 
 @UseGuards(JwtAuthGuard)
 @Controller('uploads')
@@ -31,7 +31,7 @@ export class UploadsController {
       },
     }),
   )
-  async uploadAvatar(@UploadedFile() file: Multer.File, @GetUser() user) {
+  async uploadAvatar(@UploadedFile() file: File, @GetUser() user) {
     if (!file) {
       throw new BadRequestException('Aucun fichier reçu.');
     }
@@ -52,7 +52,7 @@ export class UploadsController {
       },
     }),
   )
-  async uploadReport(@UploadedFile() file: Multer.File, @GetUser() user) {
+  async uploadReport(@UploadedFile() file: File, @GetUser() user) {
     if (!file) {
       throw new BadRequestException('Aucun fichier reçu.');
     }
