@@ -13,6 +13,8 @@ import { Types } from 'mongoose';
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
+  private static readonly STUDY_YEAR_COOLDOWN_MONTHS = 8;
+
   async findById(id: string) {
     const user = await this.userModel.findById(id).select('-passwordHash');
     if (!user) throw new NotFoundException('User not found');
@@ -49,29 +51,25 @@ export class UsersService {
 
     const update: any = { ...dto };
 
-    if (
-      typeof dto.studyYear === 'number' &&
-      dto.studyYear !== user.studyYear &&
-      user.studyYear !== null &&
-      user.studyYear !== undefined
-    ) {
-      const lastChange = user.studyYearUpdatedAt;
+    if (typeof dto.studyYear === 'number' && dto.studyYear !== user.studyYear) {
       const now = new Date();
-      if (lastChange) {
-        const diffMonths =
-          (now.getTime() - lastChange.getTime()) / (1000 * 60 * 60 * 24 * 30);
-        if (diffMonths < 11) {
-          throw new ConflictException('Modification de l\'année d\'étude autorisée après 11 mois.');
-        }
-      }
-      update.studyYearUpdatedAt = now;
-    }
+      const hasExistingYear = user.studyYear !== null && user.studyYear !== undefined;
 
-    if (
-      typeof dto.studyYear === 'number' &&
-      (user.studyYear === null || user.studyYear === undefined)
-    ) {
-      update.studyYearUpdatedAt = new Date();
+      if (hasExistingYear) {
+        const lastChange = user.studyYearUpdatedAt;
+        if (lastChange) {
+          const diffMonths =
+            (now.getTime() - lastChange.getTime()) / (1000 * 60 * 60 * 24 * 30);
+          if (diffMonths < UsersService.STUDY_YEAR_COOLDOWN_MONTHS) {
+            throw new ConflictException(
+              `Modification de l'année d'étude autorisée après ${UsersService.STUDY_YEAR_COOLDOWN_MONTHS} mois.`,
+            );
+          }
+        }
+        // Either no previous timestamp (legacy accounts) or cooldown satisfied -> set new timestamp
+        update.studyYearUpdatedAt = now;
+      }
+      // If no existing year (première configuration), we accept without starting the cooldown clock.
     }
 
     const updated = await this.userModel
