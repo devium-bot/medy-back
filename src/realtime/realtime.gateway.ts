@@ -29,9 +29,21 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const payload: any = this.jwtService.verify(token);
       const userId = String(payload?.sub || payload?._id || payload?.id);
       if (!userId) throw new Error('Invalid token payload');
+      const wasOnline = this.realtime.isUserOnline(userId);
       client.userId = userId;
       this.realtime.bindUser(userId, client);
       this.realtime.registerSocket(client);
+      if (!wasOnline) {
+        // notify opponents of reconnection
+        const sessions = await this.coopModel.find({
+          participants: new Types.ObjectId(userId),
+          status: { $in: ['pending', 'ready', 'in_progress'] },
+        }).select('_id participants').lean();
+        sessions.forEach((s) => {
+          const others = (s.participants as Types.ObjectId[]).map((p) => p.toHexString()).filter((p) => p !== userId);
+          this.realtime.emitSessionEvent(String(s._id), others, 'coop:opponent_reconnected', { userId, sessionId: String(s._id) });
+        });
+      }
     } catch {
       try { client.close(); } catch {}
     }
@@ -41,6 +53,22 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const userId = client?.userId;
     if (userId) this.realtime.unbindUser(userId, client);
     this.realtime.removeSocket(client);
+    if (userId && !this.realtime.isUserOnline(userId)) {
+      this.coopModel
+        .find({
+          participants: new Types.ObjectId(userId),
+          status: { $in: ['pending', 'ready', 'in_progress'] },
+        })
+        .select('_id participants')
+        .lean()
+        .then((sessions) => {
+          sessions.forEach((s) => {
+            const others = (s.participants as Types.ObjectId[]).map((p) => p.toHexString()).filter((p) => p !== userId);
+            this.realtime.emitSessionEvent(String(s._id), others, 'coop:opponent_disconnected', { userId, sessionId: String(s._id) });
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   private extractToken(url: string, headers?: any) {

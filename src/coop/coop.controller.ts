@@ -15,6 +15,7 @@ import { GetUser } from '../auth/get-user.decorator';
 import { CreateCoopSessionDto } from './dto/create-coop-session.dto';
 import { UpdateReadyDto } from './dto/update-ready.dto';
 import { UpdateFiltersDto } from './dto/update-filters.dto';
+import { SubmitAnswersDto } from './dto/submit-answers.dto';
 import { ObjectIdPipe } from '../common/pipes/object-id.pipe';
 
 @UseGuards(JwtAuthGuard)
@@ -66,7 +67,7 @@ export class CoopController {
   submitResult(
     @GetUser() user: any,
     @Param('id', ObjectIdPipe) sessionId: string,
-    @Body() body: { score: number; total: number; durationMs?: number },
+    @Body() body: SubmitAnswersDto,
   ) {
     return this.coopService.submitResult(sessionId, String(user._id), body);
   }

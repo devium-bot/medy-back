@@ -3,6 +3,7 @@ import { WebSocketServer } from '@nestjs/websockets';
 import type { Server as WsServer } from 'ws';
 
 type Socket = any; // ws WebSocket
+type Payload = Record<string, any>;
 
 @Injectable()
 export class RealtimeService {
@@ -11,6 +12,7 @@ export class RealtimeService {
   private sessionSockets = new Map<string, Set<Socket>>();
   private allSockets = new Set<Socket>();
   private heartbeatTimer: any;
+  private lastEmitMap = new Map<string, number>(); // throttle by sessionId+event
 
   @WebSocketServer()
   server: WsServer;
@@ -94,5 +96,61 @@ export class RealtimeService {
         this.logger.warn(`Send to session ${sessionId} failed: ${String(e)}`);
       }
     });
+  }
+
+  // ✅ payload standard + retry simple
+  emitToUsersWithRetry(userIds: string[], event: string, payload: Payload, attempts = 3) {
+    const ts = new Date().toISOString();
+    const envelope = (sessionId?: string) =>
+      JSON.stringify({ event, sessionId, ts, data: payload });
+    userIds.forEach((uid) => {
+      const set = this.userSockets.get(uid);
+      if (!set) return;
+      set.forEach((ws) => {
+        let tries = 0;
+        const send = () => {
+          tries += 1;
+          try {
+            ws.send(envelope((payload as any)?.sessionId), (err?: any) => {
+              if (err && tries < attempts) {
+                setTimeout(send, Math.pow(2, tries - 1) * 500);
+              } else if (err) {
+                this.logger.warn(`WS send failed after retries user=${uid} event=${event}: ${String(err)}`);
+              }
+            });
+          } catch (e) {
+            if (tries < attempts) setTimeout(send, Math.pow(2, tries - 1) * 500);
+            else this.logger.warn(`WS send failed user=${uid} event=${event}: ${String(e)}`);
+          }
+        };
+        send();
+      });
+    });
+  }
+
+  emitSessionEvent(sessionId: string, userIds: string[], event: string, data: Payload = {}) {
+    const throttleKey = `${sessionId}:${event}`;
+    const last = this.lastEmitMap.get(throttleKey) ?? 0;
+    if (Date.now() - last < 10_000) return;
+    this.lastEmitMap.set(throttleKey, Date.now());
+    const payload = { ...data, sessionId };
+    this.emitToUsersWithRetry(userIds, event, payload);
+  }
+
+  isUserOnline(userId: string) {
+    return (this.userSockets.get(userId)?.size || 0) > 0;
+  }
+
+  onModuleDestroy() {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.allSockets.forEach((ws) => {
+      try {
+        ws.removeAllListeners?.();
+        ws.terminate?.();
+      } catch {}
+    });
+    this.allSockets.clear();
+    this.userSockets.clear();
+    this.sessionSockets.clear();
   }
 }

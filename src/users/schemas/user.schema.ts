@@ -146,6 +146,18 @@ export class User {
     aiRequestsUsed?: number;
   };
 
+  @Prop({
+    type: [
+      {
+        token: { type: String, required: true },
+        deviceId: { type: String, required: false },
+        platform: { type: String, required: false },
+      },
+    ],
+    default: [],
+  })
+  pushTokens?: Array<{ token: string; deviceId?: string; platform?: string }>;
+
   @Prop({ default: Date.now }) createdAt?: Date;
   @Prop() updatedAt?: Date;
 }

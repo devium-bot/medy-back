@@ -18,6 +18,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { User, UserSchema } from '../users/schemas/user.schema';
 import { DailyUsageGuard } from '../common/guards/daily-usage.guard';
 import { UsersModule } from '../users/users.module';
+import { CoopAnswer, CoopAnswerSchema } from './schemas/coop-answer.schema';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { UsersModule } from '../users/users.module';
       { name: Friendship.name, schema: FriendshipSchema },
       { name: Question.name, schema: QuestionSchema },
       { name: User.name, schema: UserSchema },
+      { name: CoopAnswer.name, schema: CoopAnswerSchema },
     ]),
     FriendsModule,
     RealtimeModule,

@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class FiltersDto {
@@ -44,6 +44,9 @@ export class UpdateFiltersDto {
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(5)
+  @Max(120)
   count?: number;
 
   @IsOptional()

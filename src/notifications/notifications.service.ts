@@ -1,13 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Notification, NotificationDocument, NotificationType } from './schemas/notification.schema';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   constructor(
     @InjectModel(Notification.name)
     private readonly notificationModel: Model<NotificationDocument>,
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async emit(
@@ -45,5 +51,16 @@ export class NotificationsService {
     await this.notificationModel.updateMany({ recipient, read: false }, { $set: { read: true } });
     return { success: true };
   }
-}
 
+  async sendPushToUser(userId: string, title: string, body: string, data: Record<string, any> = {}) {
+    if (this.realtime.isUserOnline(userId)) {
+      return { skipped: true, reason: 'online' };
+    }
+    const user = await this.userModel.findById(userId).select('pushTokens username').lean();
+    const tokens = (user?.pushTokens ?? []).filter((t) => t?.token);
+    if (!tokens.length) return { skipped: true, reason: 'no_tokens' };
+    // Placeholder push: log and pretend success; integrate with Expo/Firebase later
+    this.logger.log(`Push -> user=${userId} title="${title}" tokens=${tokens.length}`);
+    return { sent: tokens.length };
+  }
+}

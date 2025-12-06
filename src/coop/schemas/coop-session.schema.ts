@@ -37,6 +37,14 @@ export class CoopSession {
   @Prop({ type: String, required: false })
   seed?: string;
 
+  // ✅ [POINT 1] Timer serveur
+  @Prop({ type: Date, required: false })
+  startedAt?: Date;
+
+  // ✅ [POINT 1] Durée calculée serveur (ms)
+  @Prop({ type: Number, required: false })
+  serverDuration?: number;
+
   @Prop({ type: String, enum: ['facile', 'moyen', 'difficile'], required: false })
   level?: 'facile' | 'moyen' | 'difficile';
 
@@ -45,6 +53,7 @@ export class CoopSession {
     of: new MongooseSchema(
       {
         score: { type: Number, required: true },
+        scorePct: { type: Number, required: false },
         total: { type: Number, required: true },
         durationMs: { type: Number, required: false },
         completedAt: { type: Date, required: false },
@@ -53,7 +62,14 @@ export class CoopSession {
     ),
     default: {},
   })
-  results?: Map<string, { score: number; total: number; durationMs?: number; completedAt?: Date }>;
+  results?: Map<string, { score: number; scorePct?: number; total: number; durationMs?: number; completedAt?: Date }>;
+
+  // ✅ [POINT 3] Utilisateurs ayant déjà soumis (anti double submit)
+  @Prop({ type: [Types.ObjectId], ref: User.name, default: [] })
+  submittedBy?: Types.ObjectId[];
+
+  @Prop({ type: Types.ObjectId, ref: User.name, required: false })
+  winner?: Types.ObjectId | null;
 
   @Prop({ type: Date, required: false, index: { expireAfterSeconds: 0 } })
   expiresAt?: Date;
