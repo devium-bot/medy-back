@@ -2,10 +2,14 @@ import { Injectable, InternalServerErrorException, BadRequestException } from '@
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 import type { File } from 'multer';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class UploadsService {
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly usersService: UsersService,
+  ) {
     const url = this.configService.get<string>('CLOUDINARY_URL');
     const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
     const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
@@ -24,8 +28,8 @@ export class UploadsService {
     }
   }
 
-  uploadAvatar(file: File, userId?: string) {
-    return new Promise<{ secure_url: string }>((resolve, reject) => {
+  async uploadAvatar(file: File, userId?: string) {
+    const { secure_url } = await new Promise<{ secure_url: string }>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'medy/avatars',
@@ -48,6 +52,13 @@ export class UploadsService {
 
       uploadStream.end(file.buffer);
     });
+
+    if (userId) {
+      // Persist the avatar on the user profile so it stays saved after upload
+      await this.usersService.updateProfile(userId, { avatarUrl: secure_url });
+    }
+
+    return { secure_url };
   }
 
   uploadReport(file: File, userId?: string) {
