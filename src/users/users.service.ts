@@ -138,6 +138,25 @@ export class UsersService {
     });
   }
 
+  async clearSubscription(userId: string) {
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        {
+          subscription: {
+            status: 'free',
+            plan: 'free',
+          },
+        },
+        { new: true },
+      )
+      .select('-passwordHash');
+    if (!updated) {
+      throw new NotFoundException('User not found');
+    }
+    return updated;
+  }
+
   async applySubscription(
     userId: string,
     opts: { months: number; paidAt: Date; provider: 'chargily' | 'iap' | 'manual'; paymentRef?: string },
