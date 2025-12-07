@@ -23,6 +23,9 @@ export class AdminUsersController {
   ) {
     // active une période Premium manuelle
     const updated = await this.usersService.setSubscription(id, new Date(), months || 12);
+    if (!updated) {
+      return { id, isPremium: false, subscription: null };
+    }
     return { id: updated._id, isPremium: true, subscription: updated.subscription };
   }
 
