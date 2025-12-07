@@ -34,4 +34,18 @@ export class AdminUsersController {
     const updated = await this.usersService.clearSubscription(id);
     return { id: updated._id, isPremium: false, subscription: updated.subscription };
   }
+
+  // Compatibilité: anciens chemins /premium
+  @Patch(':id/premium')
+  async setPremiumCompat(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body('months') months: number = 12,
+  ) {
+    return this.setSubscription(id, months);
+  }
+
+  @Delete(':id/premium')
+  async clearPremiumCompat(@Param('id', ObjectIdPipe) id: string) {
+    return this.clearSubscription(id);
+  }
 }
