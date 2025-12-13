@@ -26,3 +26,11 @@ debug.log
 # Misc
 .eslintcache
 .turbo
+
+# Seeds / fixtures (local only)
+seed.ts
+seed.Ts
+adminseed.ts
+qcm_100_medecine_realistes.json
+seed-endo.js
+endocrino_urinaire_qcm_2025.json
