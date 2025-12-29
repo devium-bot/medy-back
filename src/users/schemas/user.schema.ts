@@ -127,6 +127,20 @@ export class User {
 
   @Prop() avatarUrl?: string;
 
+  @Prop({
+    type: {
+      acceptedAt: { type: Date },
+      version: { type: String },
+      locale: { type: String },
+    },
+    default: null,
+  })
+  consent?: {
+    acceptedAt?: Date;
+    version?: string;
+    locale?: string;
+  };
+
   @Prop({ type: [String], default: [] })
   badges?: string[];
 

@@ -18,6 +18,7 @@ import { AiModule } from './ai/ai.module';
 import { PaymentsModule } from './payments/payments.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { ReportsModule } from './reports/reports.module';
+import { IapModule } from './iap/iap.module';
 
 @Module({
   imports: [
@@ -130,6 +131,16 @@ import { ReportsModule } from './reports/reports.module';
         const cloudName = config.CLOUDINARY_CLOUD_NAME ? String(config.CLOUDINARY_CLOUD_NAME) : undefined;
         const cloudApiKey = config.CLOUDINARY_API_KEY ? String(config.CLOUDINARY_API_KEY) : undefined;
         const cloudApiSecret = config.CLOUDINARY_API_SECRET ? String(config.CLOUDINARY_API_SECRET) : undefined;
+        const policyVersion = config.POLICY_VERSION ? String(config.POLICY_VERSION) : undefined;
+        const iapAppleSecret = config.IAP_APPLE_SHARED_SECRET
+          ? String(config.IAP_APPLE_SHARED_SECRET)
+          : undefined;
+        const googlePlayServiceAccount = config.GOOGLE_PLAY_SERVICE_ACCOUNT
+          ? String(config.GOOGLE_PLAY_SERVICE_ACCOUNT)
+          : undefined;
+        const googlePlayPackageName = config.GOOGLE_PLAY_PACKAGE_NAME
+          ? String(config.GOOGLE_PLAY_PACKAGE_NAME)
+          : undefined;
 
         // Expose validated + optional keys to ConfigService
         return {
@@ -178,6 +189,10 @@ import { ReportsModule } from './reports/reports.module';
           CLOUDINARY_CLOUD_NAME: cloudName,
           CLOUDINARY_API_KEY: cloudApiKey,
           CLOUDINARY_API_SECRET: cloudApiSecret,
+          POLICY_VERSION: policyVersion,
+          IAP_APPLE_SHARED_SECRET: iapAppleSecret,
+          GOOGLE_PLAY_SERVICE_ACCOUNT: googlePlayServiceAccount,
+          GOOGLE_PLAY_PACKAGE_NAME: googlePlayPackageName,
         };
       },
     }),
@@ -206,6 +221,7 @@ import { ReportsModule } from './reports/reports.module';
     AchievementsModule,
     AiModule,
     PaymentsModule,
+    IapModule,
     UploadsModule,
     ReportsModule,
   ],

@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { Model } from 'mongoose';
@@ -14,9 +15,13 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly configService: ConfigService,
+  ) {}
 
   private static readonly STUDY_YEAR_COOLDOWN_MONTHS = 8;
+  private static readonly MAX_ADMIN_SEARCH_LIMIT = 25;
 
   async findById(id: string) {
     const user = await this.userModel.findById(id).select('-passwordHash');
@@ -78,6 +83,24 @@ export class UsersService {
     const updated = await this.userModel
       .findByIdAndUpdate(id, { $set: update }, { new: true })
       .select('-passwordHash');
+    return updated;
+  }
+
+  async recordConsent(userId: string, payload: { version?: string; locale?: string }) {
+    const fallbackVersion = this.configService.get<string>('POLICY_VERSION') || null;
+    const version = payload.version ?? fallbackVersion;
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        {
+          'consent.acceptedAt': new Date(),
+          'consent.version': version,
+          'consent.locale': payload.locale ?? null,
+        },
+        { new: true },
+      )
+      .select('-passwordHash');
+    if (!updated) throw new NotFoundException('User not found');
     return updated;
   }
 
@@ -189,6 +212,36 @@ export class UsersService {
     return updated;
   }
 
+  async applySubscriptionWithDates(
+    userId: string,
+    opts: {
+      startDate: Date;
+      endDate: Date;
+      provider: 'chargily' | 'iap' | 'manual';
+      paymentRef?: string;
+    },
+  ) {
+    const user = await this.userModel.findById(userId).select('subscription');
+    if (!user) throw new NotFoundException('User not found');
+
+    const updated = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        {
+          'subscription.paymentDate': opts.startDate,
+          'subscription.startDate': opts.startDate,
+          'subscription.endDate': opts.endDate,
+          'subscription.status': 'active',
+          'subscription.plan': 'premium',
+          'subscription.provider': opts.provider,
+          'subscription.lastPaymentRef': opts.paymentRef,
+        },
+        { new: true },
+      )
+      .select('-passwordHash');
+    return updated;
+  }
+
   async findByPhone(phone: string) {
     return this.userModel.findOne({ phone }).select('-passwordHash');
   }
@@ -209,6 +262,71 @@ export class UsersService {
       .limit(Math.min(Math.max(limit, 1), 25))
       .select('username firstName lastName email')
       .lean();
+  }
+
+  async searchUsersAdmin(term: string, limit = 20) {
+    if (!term || !term.trim()) return [];
+    const trimmed = term.trim();
+    const sanitized = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(sanitized, 'i');
+    const or: any[] = [
+      { username: regex },
+      { email: regex },
+      { firstName: regex },
+      { lastName: regex },
+    ];
+    if (/^[a-f0-9]{24}$/i.test(trimmed)) {
+      or.push({ _id: new Types.ObjectId(trimmed) });
+    }
+
+    const users = await this.userModel
+      .find({ $or: or })
+      .limit(
+        Math.min(
+          Math.max(parseInt(String(limit), 10) || 20, 1),
+          UsersService.MAX_ADMIN_SEARCH_LIMIT,
+        ),
+      )
+      .select('username firstName lastName email studyYear subscription role')
+      .lean();
+
+    const nowMs = Date.now();
+    return users.map((user: any) => {
+      const sub = user.subscription ?? {};
+      const endMs = sub?.endDate ? new Date(sub.endDate).getTime() : undefined;
+      const hasFutureEnd = endMs === undefined || endMs > nowMs;
+      const isPremium =
+        user.role === 'admin' ||
+        (hasFutureEnd && (sub?.status === 'active' || sub?.plan === 'premium'));
+      return {
+        _id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        studyYear: user.studyYear ?? null,
+        isPremium,
+      };
+    });
+  }
+
+  async adminSetStudyYear(userId: string, studyYear: number) {
+    const user = await this.userModel.findById(userId).select('studyYear studyYearUpdatedAt');
+    if (!user) throw new NotFoundException('User not found');
+
+    const hasExistingYear = user.studyYear !== null && user.studyYear !== undefined;
+    const changed = typeof studyYear === 'number' && studyYear !== user.studyYear;
+
+    const update: any = { studyYear };
+    if (changed && hasExistingYear) {
+      update.studyYearUpdatedAt = new Date();
+    }
+
+    const updated = await this.userModel
+      .findByIdAndUpdate(userId, { $set: update }, { new: true })
+      .select('email username firstName lastName studyYear');
+    if (!updated) throw new NotFoundException('User not found');
+    return updated;
   }
 
   async createByPhone(phone: string) {

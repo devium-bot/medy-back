@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:users": "ts-node seed.ts",
     "admin:create": "ts-node scripts/create-admin.ts",
+    "reset:users": "ts-node scripts/reset-users.ts",
     "ai:test": "ts-node scripts/ai-smoke.ts"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ObjectIdPipe } from '../common/pipes/object-id.pipe';
+import { AdminSetStudyYearDto } from './dto/admin-set-study-year.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
@@ -13,7 +14,7 @@ export class AdminUsersController {
 
   @Get('search')
   async search(@Query('query') query: string, @Query('limit') limit = '20') {
-    return this.usersService.searchUsers(query, parseInt(String(limit), 10) || 20);
+    return this.usersService.searchUsersAdmin(query, parseInt(String(limit), 10) || 20);
   }
 
   @Patch(':id/subscription')
@@ -47,5 +48,14 @@ export class AdminUsersController {
   @Delete(':id/premium')
   async clearPremiumCompat(@Param('id', ObjectIdPipe) id: string) {
     return this.clearSubscription(id);
+  }
+
+  @Patch(':id/study-year')
+  async setStudyYear(
+    @Param('id', ObjectIdPipe) id: string,
+    @Body() dto: AdminSetStudyYearDto,
+  ) {
+    const updated = await this.usersService.adminSetStudyYear(id, dto.studyYear);
+    return { id: updated._id, studyYear: updated.studyYear };
   }
 }

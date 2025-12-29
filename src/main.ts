@@ -17,9 +17,31 @@ async function bootstrap() {
     : [];
   const defaultOrigins = ['http://localhost:5173'];
   const allowedOrigins = parsedOrigins.length ? parsedOrigins : defaultOrigins;
+  const allowAllOrigins = allowedOrigins.includes('*');
+  const allowLocalhostAnyPort =
+    allowedOrigins.includes('http://localhost') || allowedOrigins.includes('http://127.0.0.1');
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || origin === 'null') {
+        callback(null, true);
+        return;
+      }
+
+      if (allowAllOrigins || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowLocalhostAnyPort) {
+        if (/^http:\/\/localhost:\d+$/.test(origin) || /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
+          callback(null, true);
+          return;
+        }
+      }
+
+      callback(new Error(`Origin ${origin} not allowed by CORS`), false);
+    },
     credentials: true,
   });
 

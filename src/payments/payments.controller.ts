@@ -16,7 +16,7 @@ export class PaymentsController {
   async initChargily(@GetUser() user) {
     const fallbackUrl =
       this.configService.get<string>('CHARGILY_PAYMENT_LINK') ||
-      'http://pay.chargily.com/test/payment-links/01kbb3w2j9w9tnn81t1ckeqxvf';
+      'https://pay.chargily.com/test/payment-links/01kbb3w2j9w9tnn81t1ckeqxvf';
     // Ici on pourrait créer dynamiquement une facture via l'API Chargily.
     // Pour l'instant on renvoie un lien de paiement statique configurable.
     return {

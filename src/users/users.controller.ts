@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ConsentDto } from './dto/consent.dto';
 import { ObjectIdPipe } from '../common/pipes/object-id.pipe';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -30,6 +31,11 @@ export class UsersController {
   @Patch('me')
   updateMe(@GetUser() user, @Body() dto: UpdateUserDto) {
     return this.usersService.updateProfile(user._id, dto);
+  }
+
+  @Post('me/consent')
+  recordConsent(@GetUser() user, @Body() dto: ConsentDto) {
+    return this.usersService.recordConsent(user._id, dto);
   }
 
   @Delete('me')
