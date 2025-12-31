@@ -34,6 +34,10 @@ export class DailyUsageGuard implements CanActivate {
       usage.dateISO = today;
       usage.sessionsUsed = 0;
       usage.questionsUsed = 0;
+      usage.aiRequestsUsed = 0;
+      usage.examSessionsUsed = 0;
+      usage.soloSessionsUsed = 0;
+      usage.coopSessionsUsed = 0;
     }
 
     const isAdmin = (dbUser.role as any) === 'admin';
@@ -55,10 +59,42 @@ export class DailyUsageGuard implements CanActivate {
         url.startsWith('/questions/solo/start')
       )
     ) {
-      if ((usage.sessionsUsed || 0) >= 2) {
-        throw new ForbiddenException("Limite quotidienne atteinte: 2 sessions par jour en mode gratuit.");
+      if (url.startsWith('/questions/solo/start')) {
+        const mode = String(req?.body?.mode ?? 'random');
+        const countRaw = Number(req?.body?.count ?? 0);
+        if (mode === 'exam') {
+          if ((usage.examSessionsUsed || 0) >= 1) {
+            throw new ForbiddenException(
+              "Limite quotidienne atteinte: 1 examen complet par jour en mode gratuit.",
+            );
+          }
+          if (countRaw !== 40) {
+            throw new ForbiddenException(
+              "Le plan gratuit autorise uniquement un examen complet de 40 questions.",
+            );
+          }
+          usage.examSessionsUsed = (usage.examSessionsUsed || 0) + 1;
+        } else {
+          if ((usage.soloSessionsUsed || 0) >= 1) {
+            throw new ForbiddenException(
+              "Limite quotidienne atteinte: 1 session solo par jour en mode gratuit.",
+            );
+          }
+          usage.soloSessionsUsed = (usage.soloSessionsUsed || 0) + 1;
+        }
+      } else if (url.startsWith('/coop/session')) {
+        if ((usage.coopSessionsUsed || 0) >= 1) {
+          throw new ForbiddenException(
+            "Limite quotidienne atteinte: 1 session coop par jour en mode gratuit.",
+          );
+        }
+        usage.coopSessionsUsed = (usage.coopSessionsUsed || 0) + 1;
       }
-      usage.sessionsUsed = (usage.sessionsUsed || 0) + 1;
+
+      usage.sessionsUsed =
+        (usage.examSessionsUsed || 0) +
+        (usage.soloSessionsUsed || 0) +
+        (usage.coopSessionsUsed || 0);
       dbUser.usageDaily = usage as any;
       await dbUser.save();
       return true;

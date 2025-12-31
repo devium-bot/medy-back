@@ -108,6 +108,12 @@ export class FriendsService {
     await this.notificationsService.emit(recipient, 'friend_request', {
       fromUserId: String(requester),
     });
+    await this.notificationsService.sendPushToUser(
+      recipient.toHexString(),
+      'Nouvelle invitation',
+      "Vous avez reçu une demande d'ami.",
+      { type: 'friend_request', fromUserId: String(requester) },
+    );
     const populated = await this.friendshipModel
       .findById(friendship._id)
       .populate('requester', 'username firstName lastName email')
@@ -178,6 +184,12 @@ export class FriendsService {
       await this.notificationsService.emit(friendship.requester, 'friend_accepted', {
         byUserId: String(friendship.recipient),
       });
+      await this.notificationsService.sendPushToUser(
+        friendship.requester.toHexString(),
+        'Invitation acceptée',
+        'Votre demande d’ami a été acceptée.',
+        { type: 'friend_accepted', byUserId: String(friendship.recipient) },
+      );
     }
     const populated = await this.friendshipModel
       .findById(friendshipId)

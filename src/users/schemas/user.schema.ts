@@ -150,6 +150,9 @@ export class User {
       sessionsUsed: { type: Number, default: 0 },
       questionsUsed: { type: Number, default: 0 },
       aiRequestsUsed: { type: Number, default: 0 },
+      examSessionsUsed: { type: Number, default: 0 },
+      soloSessionsUsed: { type: Number, default: 0 },
+      coopSessionsUsed: { type: Number, default: 0 },
     },
     default: {},
   })
@@ -158,6 +161,9 @@ export class User {
     sessionsUsed?: number;
     questionsUsed?: number;
     aiRequestsUsed?: number;
+    examSessionsUsed?: number;
+    soloSessionsUsed?: number;
+    coopSessionsUsed?: number;
   };
 
   @Prop({

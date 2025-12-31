@@ -147,7 +147,7 @@ export class QuestionsController {
     if (speciality) filters.speciality = String(speciality).toLowerCase();
     if (university) filters.university = String(university).trim();
 
-    const count = Math.min(3, Math.max(1, Number(countRaw) || 3));
+    const count = Math.max(1, Number(countRaw) || 3);
     return this.questionsService.getRandom(count, filters);
   }
 

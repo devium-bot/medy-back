@@ -270,6 +270,9 @@ export class CoopService {
     // push offline au partenaire
     const other = payload.participants.find((p) => p !== userId);
     if (other) {
+      await this.notificationsService.emit(new Types.ObjectId(other), 'coop_ready', {
+        sessionId: String(session._id),
+      });
       await this.notificationsService.sendPushToUser(other, '🎮 Session prête', 'Votre coop peut démarrer.', {
         sessionId: String(session._id),
         type: 'coop_ready',

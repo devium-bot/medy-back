@@ -7,6 +7,7 @@ import { ConsentDto } from './dto/consent.dto';
 import { ObjectIdPipe } from '../common/pipes/object-id.pipe';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { DeletePushTokenDto, PushTokenDto } from './dto/push-token.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -38,6 +39,16 @@ export class UsersController {
     return this.usersService.recordConsent(user._id, dto);
   }
 
+  @Post('me/push-tokens')
+  savePushToken(@GetUser() user, @Body() dto: PushTokenDto) {
+    return this.usersService.savePushToken(user._id, dto);
+  }
+
+  @Delete('me/push-tokens')
+  removePushToken(@GetUser() user, @Body() dto: DeletePushTokenDto) {
+    return this.usersService.removePushToken(user._id, dto);
+  }
+
   @Delete('me')
   deleteMe(@GetUser() user, @Body('password') password: string) {
     return this.usersService.deleteAccount(user._id, password);
@@ -54,8 +65,11 @@ export class UsersController {
     const dateISO = usage?.dateISO === today ? usage.dateISO : today;
     const sessionsUsed = usage?.dateISO === today ? Number(usage.sessionsUsed ?? 0) : 0;
     const questionsUsed = usage?.dateISO === today ? Number(usage.questionsUsed ?? 0) : 0;
-    const sessionsLimit = 2;
-    const questionsPerSessionLimit = 3;
+    const examSessionsUsed = usage?.dateISO === today ? Number(usage.examSessionsUsed ?? 0) : 0;
+    const soloSessionsUsed = usage?.dateISO === today ? Number(usage.soloSessionsUsed ?? 0) : 0;
+    const coopSessionsUsed = usage?.dateISO === today ? Number(usage.coopSessionsUsed ?? 0) : 0;
+    const sessionsLimit = 3;
+    const questionsPerSessionLimit = 40;
     const nowMs = Date.now();
     const endMs = sub?.endDate ? new Date(sub.endDate).getTime() : undefined;
     const hasFutureEnd = endMs === undefined || endMs > nowMs;
@@ -67,10 +81,16 @@ export class UsersController {
       plan: isPremium ? 'premium' : (sub?.plan ?? 'free'),
       isPremium,
       dateISO,
-      sessionsUsed,
+      sessionsUsed: isPremium ? sessionsUsed : examSessionsUsed + soloSessionsUsed + coopSessionsUsed,
       sessionsLimit,
       questionsUsed,
       questionsPerSessionLimit,
+      examSessionsUsed,
+      soloSessionsUsed,
+      coopSessionsUsed,
+      examSessionsLimit: 1,
+      soloSessionsLimit: 1,
+      coopSessionsLimit: 1,
     };
   }
 

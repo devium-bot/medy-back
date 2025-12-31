@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { DeletePushTokenDto, PushTokenDto } from './dto/push-token.dto';
 import { Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 
@@ -84,6 +85,50 @@ export class UsersService {
       .findByIdAndUpdate(id, { $set: update }, { new: true })
       .select('-passwordHash');
     return updated;
+  }
+
+  async savePushToken(id: string, dto: PushTokenDto) {
+    const token = String(dto?.token || '').trim();
+    if (!token) {
+      throw new BadRequestException('Token push invalide');
+    }
+
+    const user = await this.userModel.findById(id).select('pushTokens');
+    if (!user) throw new NotFoundException('User not found');
+
+    const deviceId = dto?.deviceId ? String(dto.deviceId) : undefined;
+    const platform = dto?.platform ? String(dto.platform) : undefined;
+
+    const next = Array.isArray(user.pushTokens) ? [...user.pushTokens] : [];
+    const filtered = next.filter((t) => t?.token !== token && (!deviceId || t?.deviceId !== deviceId));
+    filtered.push({ token, deviceId, platform });
+    const capped = filtered.slice(-10);
+
+    user.pushTokens = capped as any;
+    await user.save();
+    return { success: true };
+  }
+
+  async removePushToken(id: string, dto: DeletePushTokenDto) {
+    const token = dto?.token ? String(dto.token).trim() : '';
+    const deviceId = dto?.deviceId ? String(dto.deviceId) : '';
+    if (!token && !deviceId) {
+      throw new BadRequestException('Token ou deviceId requis');
+    }
+
+    const user = await this.userModel.findById(id).select('pushTokens');
+    if (!user) throw new NotFoundException('User not found');
+
+    const current = Array.isArray(user.pushTokens) ? user.pushTokens : [];
+    const next = current.filter((t) => {
+      if (token && t?.token === token) return false;
+      if (deviceId && t?.deviceId === deviceId) return false;
+      return true;
+    });
+
+    user.pushTokens = next as any;
+    await user.save();
+    return { success: true };
   }
 
   async recordConsent(userId: string, payload: { version?: string; locale?: string }) {
